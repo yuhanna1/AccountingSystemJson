@@ -9,7 +9,8 @@ from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest,
     TextMessage, ImageMessage, MessagingApiBlob,
-    QuickReply, QuickReplyItem, MessageAction
+    QuickReply, QuickReplyItem, MessageAction,
+    FlexMessage, FlexContainer
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
@@ -118,17 +119,25 @@ def handle_message(event):
                 contents.append(item_box)
                 contents.append({"type": "separator", "margin": "md"})
 
-            flex_message = {
+            # 定義 Flex Bubble 結構
+            flex_bubble = {
                 "type": "bubble",
                 "header": {
                     "type": "box", "layout": "vertical",
-                    "contents": [{"type": "text", "text": "📅 本月消費明細", "weight": "bold", "size": "xl"}]
+                    "contents": [{"type": "text", "text": "📅 本月消費明細", "weight": "bold", "size": "xl", "color": "#1DB446"}]
                 },
                 "body": {"type": "box", "layout": "vertical", "contents": contents[:-1]}
             }
+
+            # 使用 FlexMessage 與 FlexContainer 包裝 ---
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[{"type": "flex", "altText": "本月花費明細", "contents": flex_message}]
+                messages=[
+                    FlexMessage(
+                        alt_text="本月消費明細",
+                        contents=FlexContainer.from_dict(flex_bubble)
+                    )
+                ]
             ))
             return
         
