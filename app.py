@@ -134,5 +134,5 @@ def create_rich_menu():
             print(f"Rich Menu Set Error or Already Exists: {e}")
 
 if __name__ == "__main__":
-    # create_rich_menu() # 如果選單已設定好可註解掉
+    create_rich_menu() # 如果選單已設定好可註解掉
     app.run()

@@ -14,5 +14,29 @@
     "type": "expense",
     "memo": "漢堡",
     "time": "2025-12-13 21:41:25"
+  },
+  {
+    "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
+    "category": "娛樂",
+    "amount": 250,
+    "type": "expense",
+    "memo": "玩",
+    "time": "2025-12-27 13:24:03"
+  },
+  {
+    "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
+    "category": "運動",
+    "amount": 50,
+    "type": "expense",
+    "memo": "游泳",
+    "time": "2025-12-27 13:28:21"
+  },
+  {
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "晚餐",
+    "amount": 65,
+    "type": "expense",
+    "memo": "便當",
+    "time": "2025-12-27 19:42:07"
   }
 ]
