@@ -163,10 +163,17 @@ def handle_message(event):
         elif text.startswith("設定"):
             try:
                 parts = text.split()
-                set_budget(user_id, parts[1], int(parts[2]))
-                reply_text = f"✅ 已將【{parts[1]}】額度設為 ${parts[2]}"
+
+                if len(parts) < 3:
+                    raise ValueError("缺少金額")
+
+                category, amount = parts[1], int(parts[2])
+                set_budget(user_id, category, amount)
+
+                reply_text = f"✅ 【{category}】額度設定成功！\n現在您可以開始記錄這筆花費了。"
             except:
-                reply_text = "❌ 格式錯誤。範例：設定 飲食 5000"
+                reply_text = "❌ 設定格式：設定 類別 金額\n例如：設定 飲食 5000"
+            
             line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]))
             return
 
@@ -230,7 +237,7 @@ def handle_message(event):
                         QuickReplyItem(action=MessageAction(label="10000", text=f"設定 {category} 10000")),
                         QuickReplyItem(action=MessageAction(label="自定義", text=f"設定 {category} "))
                     ])
-                    
+
                     line_bot_api.reply_message(ReplyMessageRequest(
                         reply_token=event.reply_token,
                         messages=[TextMessage(text=reply_text, quick_reply=quick_set_qr)]
