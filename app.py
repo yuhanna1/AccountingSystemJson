@@ -103,16 +103,28 @@ def handle_message(event):
 
             contents = []
             for r in monthly_records:
-                display_time = r['time'][5:16]
+                display_date = r['time'][5:10]
                 item_box = {
-                    "type": "box", "layout": "horizontal", "margin": "md",
+                    "type": "box", "layout": "horizontal", "margin": "md", "spacing": "sm",
                     "contents": [
-                        {"type": "text", "text": display_time, "size": "xs", "color": "#aaaaaa", "flex": 2, "gravity": "center"},
+                        # 日期
+                        {"type": "text", "text": display_date, "size": "xs", "color": "#aaaaaa", "flex": 2, "gravity": "center"},
+                        # 類別
                         {"type": "text", "text": r['category'], "size": "sm", "flex": 2, "gravity": "center"},
+                        # 金額
                         {"type": "text", "text": f"${r['amount']}", "size": "sm", "weight": "bold", "flex": 2, "align": "end", "gravity": "center"},
                         {
-                            "type": "button", "flex": 1, "height": "sm", "style": "link",
-                            "action": {"type": "message", "label": "🗑️", "text": f"刪除 {r['id']}"}
+                            "type": "text",
+                            "text": "🗑️",
+                            "size": "lg",
+                            "flex": 1,
+                            "align": "center",
+                            "gravity": "center",
+                            "action": {
+                                "type": "message",
+                                "label": "刪除",
+                                "text": f"刪除 {r['id']}"
+                            }
                         }
                     ]
                 }
