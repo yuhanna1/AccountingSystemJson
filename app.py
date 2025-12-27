@@ -224,8 +224,13 @@ def handle_message(event):
                 if limit is None or int(limit) <= 0:
                     reply_text = f"⚠️ 記帳失敗！\n您尚未設定【{category}】的每月額度。"
                     quick_set_qr = QuickReply(items=[
-                        QuickReplyItem(action=MessageAction(label=f"設定{category}額度", text=f"設定 {category} "))
+                        QuickReplyItem(action=MessageAction(label="3000", text=f"設定 {category} 3000")),
+                        QuickReplyItem(action=MessageAction(label="5000", text=f"設定 {category} 5000")),
+                        QuickReplyItem(action=MessageAction(label="8000", text=f"設定 {category} 8000")),
+                        QuickReplyItem(action=MessageAction(label="10000", text=f"設定 {category} 10000")),
+                        QuickReplyItem(action=MessageAction(label="自定義", text=f"設定 {category} "))
                     ])
+                    
                     line_bot_api.reply_message(ReplyMessageRequest(
                         reply_token=event.reply_token,
                         messages=[TextMessage(text=reply_text, quick_reply=quick_set_qr)]
@@ -255,7 +260,7 @@ def handle_message(event):
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=reply_text)]
             ))
-            
+
 # --- 圖文選單建立 ---
 def create_rich_menu():
     with ApiClient(configuration) as api_client:
