@@ -47,8 +47,6 @@ def callback():
 def handle_follow(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
-        
-        # 定義歡迎文字
         welcome_text = (
             "🌟 您好！歡迎使用「記帳助手」🌟\n\n"
             "🚀 快速上手指南：\n"
@@ -58,8 +56,6 @@ def handle_follow(event):
             "4.【查看報告】：點擊下方選單按鈕\n\n"
             "💡 現在就輸入一個數字試試看吧！"
         )
-        
-        # 回覆訊息
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=event.reply_token,
@@ -80,7 +76,6 @@ def handle_message(event):
         if text == "圖表":
             records = get_user_transactions(user_id)
             chart_url = generate_expense_pie_chart(records)
-            
             if chart_url:
                 messages = [
                     TextMessage(text="📊 這是您的消費分析圓餅圖："),
@@ -88,15 +83,13 @@ def handle_message(event):
                 ]
             else:
                 messages = [TextMessage(text="查無紀錄，請先開始記帳喔！")]
-            
             line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=messages))
             return
         
-        # 2. 功能：查看本月摘要與額度狀態
+        # 2. 功能：本月花費明細 (Flex Message)
         elif text == "本月花費":
             records = get_user_transactions(user_id)
             this_month = datetime.now().strftime("%Y-%m")
-
             monthly_records = [r for r in records if r["time"].startswith(this_month) and r["type"] == "expense"]
             monthly_records.reverse()
             
@@ -110,23 +103,15 @@ def handle_message(event):
             contents = []
             for r in monthly_records:
                 display_time = r['time'][5:16]
-
                 item_box = {
-                    "type": "box",
-                    "layout": "horizontal",
-                    "margin": "md",
+                    "type": "box", "layout": "horizontal", "margin": "md",
                     "contents": [
                         {"type": "text", "text": display_time, "size": "xs", "color": "#aaaaaa", "flex": 2, "gravity": "center"},
                         {"type": "text", "text": r['category'], "size": "sm", "flex": 2, "gravity": "center"},
                         {"type": "text", "text": f"${r['amount']}", "size": "sm", "weight": "bold", "flex": 2, "align": "end", "gravity": "center"},
                         {
-                            "type": "button",
-                            "action": {
-                                "type": "message",
-                                "label": "🗑️",
-                                "text": f"刪除 {r['id']}"
-                            },
-                            "flex": 1, "height": "sm", "style": "link"
+                            "type": "button", "flex": 1, "height": "sm", "style": "link",
+                            "action": {"type": "message", "label": "🗑️", "text": f"刪除 {r['id']}"}
                         }
                     ]
                 }
@@ -139,19 +124,15 @@ def handle_message(event):
                     "type": "box", "layout": "vertical",
                     "contents": [{"type": "text", "text": "📅 本月消費明細", "weight": "bold", "size": "xl"}]
                 },
-                "body": {
-                    "type": "box", "layout": "vertical",
-                    "contents": contents[:-1] # 移除最後一個分隔線
-                }
+                "body": {"type": "box", "layout": "vertical", "contents": contents[:-1]}
             }
-
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[{"type": "flex", "altText": "本月花費明細", "contents": flex_message}]
             ))
             return
         
-        # --- B. 處理「刪除」指令 ---
+        # 3. 功能：刪除指令
         elif text.startswith("刪除"):
             parts = text.split()
             if len(parts) == 2:
@@ -160,18 +141,20 @@ def handle_message(event):
                     res_text = "✅ 紀錄已成功刪除！"
                 else:
                     res_text = "❌ 刪除失敗，找不到該筆紀錄。"
+            else:
+                res_text = "⚠️ 請輸入正確格式：刪除 [ID]"
                 
-                line_bot_api.reply_message(ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=res_text)]
-                ))
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=res_text)]
+            ))
             return
         
-        # 3. 功能：設定預算限額
+        # 4. 功能：設定預算
         elif text == "設定額度":
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text="💰 欲設定每月預算，請直接輸入金額：\n")]
+                messages=[TextMessage(text="💰 欲設定每月預算，請輸入「設定 類別 金額」\n例如：設定 飲食 5000")]
             ))
             return
         
@@ -183,44 +166,20 @@ def handle_message(event):
                 reply_text = f"✅ 已將【{category}】的每月額度設為 ${amount}"
             except:
                 reply_text = "❌ 格式錯誤。範例：設定 飲食 5000"
-            
             line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]))
             return
-        
-        elif text.startswith("刪除"):
-            # 格式：刪除 [ID]
-            parts = text.split()
-            if len(parts) > 1:
-                target_id = parts[1]
-                # 呼叫 json_store 的刪除功能 (需自定義 delete_transaction)
-                success = delete_transaction(user_id, target_id) 
-                reply_text = "✅ 已成功刪除該筆紀錄" if success else "❌ 找不到該紀錄"
-            else:
-                reply_text = "請輸入正確的刪除指令"
 
-        # 4. 核心功能：記帳與快速回應 (Quick Reply)
+        # 5. 核心功能：金額輸入觸發 Quick Reply 或 完整記帳
         else:
             parts = text.split()
             if not parts: return
 
-            # A. 判斷是否為「金額優先」模式 (例如輸入 "100 宵夜")
+            # A. 判斷是否為純數字 (啟動快速類別選單)
             if parts[0].isdigit():
                 amount = parts[0]
                 memo = " ".join(parts[1:]) if len(parts) > 1 else ""
                 
-                # 定義快速回應按鈕
-                categories = ["飲食", "娛樂", "運動", "交通", "健康", "其他"]
                 quick_reply_items = [
-                    # 第一顆按鈕放日期選擇器 (用戶可以不點，預設就是今天)
-                    QuickReplyItem(
-                        action=DateTimePickerAction(
-                            label="📅 改日期",
-                            data=f"action=pick_date&amount={amount}&memo={memo}",
-                            mode="date"
-                        )
-                    )
-                ] + [
-                    # 後面接著原本的類別按鈕
                     QuickReplyItem(
                         action=MessageAction(label=cat, text=f"{cat} {amount} {memo}".strip())
                     ) for cat in categories
@@ -235,15 +194,12 @@ def handle_message(event):
                 ))
                 return
 
-            # B. 處理完整格式 (例如由快速回應觸發的 "飲食 100 宵夜")
+            # B. 處理「類別 金額 備註」完整記帳格式
             try:
                 if len(parts) < 2: raise ValueError()
-
-                category = parts[0]
-                amount = int(parts[1])
+                category, amount = parts[0], int(parts[1])
                 memo = " ".join(parts[2:]) if len(parts) > 2 else ""
 
-                # 存檔
                 add_transaction(user_id, {"category": category, "amount": amount, "type": "expense", "memo": memo})
 
                 # 預算警示檢查
