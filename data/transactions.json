@@ -1,74 +1,47 @@
 [
   {
-    "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
-    "category": "餐飲",
-    "amount": 120,
-    "type": "expense",
-    "memo": "炒飯",
-    "time": "2025-12-13 21:34:53"
-  },
-  {
-    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
-    "category": "早餐",
-    "amount": 80,
-    "type": "expense",
-    "memo": "漢堡",
-    "time": "2025-12-13 21:41:25"
-  },
-  {
-    "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
-    "category": "娛樂",
-    "amount": 250,
-    "type": "expense",
-    "memo": "玩",
-    "time": "2025-12-27 13:24:03"
-  },
-  {
-    "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
-    "category": "運動",
-    "amount": 50,
-    "type": "expense",
-    "memo": "游泳",
-    "time": "2025-12-27 13:28:21"
-  },
-  {
-    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
-    "category": "晚餐",
-    "amount": 65,
-    "type": "expense",
-    "memo": "便當",
-    "time": "2025-12-27 19:42:07"
-  },
-  {
-    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
-    "category": "餐飲",
-    "amount": 1000,
-    "type": "expense",
-    "memo": "吃飯",
-    "time": "2025-12-27 20:12:29"
-  },
-  {
-    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
-    "category": "餐飲",
-    "amount": 3000,
-    "type": "expense",
-    "memo": "吃飯",
-    "time": "2025-12-27 20:12:59"
-  },
-  {
+    "id": "1766842916929",
     "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
     "category": "飲食",
     "amount": 500,
     "type": "expense",
     "memo": "晚餐",
-    "time": "2025-12-27 20:21:06"
+    "time": "2025-12-27 21:41:56"
   },
   {
+    "id": "1766843807293",
     "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
     "category": "飲食",
     "amount": 100,
     "type": "expense",
-    "memo": "牛肉麵",
-    "time": "2025-12-27 20:21:41"
+    "memo": "",
+    "time": "2025-12-27 21:56:47"
+  },
+  {
+    "id": "1766843828121",
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "娛樂",
+    "amount": 200,
+    "type": "expense",
+    "memo": "",
+    "time": "2025-12-27 21:57:08"
+  },
+  {
+    "id": "1766843835020",
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "健康",
+    "amount": 300,
+    "type": "expense",
+    "memo": "",
+    "time": "2025-12-27 21:57:15"
+  },
+  {
+    "id": "1766844203947",
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "飲食",
+    "amount": 100,
+    "type": "expense",
+    "memo": "",
+    "time": "2025-12-27 22:03:23"
   }
 ]
