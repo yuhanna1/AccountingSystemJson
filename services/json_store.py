@@ -1,3 +1,4 @@
+#json_store.py
 import json
 import os
 from datetime import datetime
@@ -34,3 +35,13 @@ def add_transaction(user_id, data):
         json.dump(records, f, ensure_ascii=False, indent=2)
 
     return {"status": True}
+# services/json_store.py 底部新增
+
+def get_user_transactions(user_id):
+    if os.path.exists(FILE_PATH):
+        with open(FILE_PATH, "r", encoding="utf-8") as f:
+            all_records = json.load(f)
+            # 過濾出屬於該 user_id 的紀錄
+            user_records = [r for r in all_records if r["user_id"] == user_id]
+            return user_records
+    return []
