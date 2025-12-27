@@ -1,16 +1,15 @@
 from flask import Flask, request, abort
-from datetime import datetime
 import requests
 import json
-import urllib.parse
+import os
+from datetime import datetime
 
 from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest,
     TextMessage, ImageMessage, MessagingApiBlob,
-    QuickReply, QuickReplyItem, MessageAction, DateTimePickerAction
-
+    QuickReply, QuickReplyItem, MessageAction
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
@@ -97,8 +96,9 @@ def handle_message(event):
         elif text == "本月花費":
             records = get_user_transactions(user_id)
             this_month = datetime.now().strftime("%Y-%m")
-            # 只抓本月支出
+
             monthly_records = [r for r in records if r["time"].startswith(this_month) and r["type"] == "expense"]
+            monthly_records.reverse()
             
             if not monthly_records:
                 line_bot_api.reply_message(ReplyMessageRequest(
@@ -107,23 +107,31 @@ def handle_message(event):
                 ))
                 return
 
-            # 建立 Flex Message 內容
             contents = []
             for r in monthly_records:
-                contents.append({
+                display_time = r['time'][5:16]
+
+                item_box = {
                     "type": "box",
                     "layout": "horizontal",
+                    "margin": "md",
                     "contents": [
-                        {"type": "text", "text": f"{r['category']}", "size": "sm", "flex": 2},
-                        {"type": "text", "text": f"${r['amount']}", "size": "sm", "weight": "bold", "flex": 2},
-                        {"type": "button", "action": {
-                            "type": "message",
-                            "label": "🗑️",
-                            "text": f"刪除 {r['id']}"
-                        }, "flex": 1, "height": "sm"}
+                        {"type": "text", "text": display_time, "size": "xs", "color": "#aaaaaa", "flex": 2, "gravity": "center"},
+                        {"type": "text", "text": r['category'], "size": "sm", "flex": 2, "gravity": "center"},
+                        {"type": "text", "text": f"${r['amount']}", "size": "sm", "weight": "bold", "flex": 2, "align": "end", "gravity": "center"},
+                        {
+                            "type": "button",
+                            "action": {
+                                "type": "message",
+                                "label": "🗑️",
+                                "text": f"刪除 {r['id']}"
+                            },
+                            "flex": 1, "height": "sm", "style": "link"
+                        }
                     ]
-                })
-                contents.append({"type": "separator", "margin": "sm"})
+                }
+                contents.append(item_box)
+                contents.append({"type": "separator", "margin": "md"})
 
             flex_message = {
                 "type": "bubble",
@@ -142,6 +150,7 @@ def handle_message(event):
                 messages=[{"type": "flex", "altText": "本月花費明細", "contents": flex_message}]
             ))
             return
+        
         # --- B. 處理「刪除」指令 ---
         elif text.startswith("刪除"):
             parts = text.split()
