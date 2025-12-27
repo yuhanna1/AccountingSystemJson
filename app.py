@@ -172,47 +172,95 @@ def handle_message(event):
 
         # 5. 核心：金額輸入觸發 Quick Reply
         else:
-            parts = text.split()
-            if not parts: return
-
-            if parts[0].isdigit():
-                amount = parts[0]
-                memo = " ".join(parts[1:]) if len(parts) > 1 else ""
-                quick_reply_items = [
-                    QuickReplyItem(action=MessageAction(label=cat, text=f"{cat} {amount} {memo}".strip())) for cat in categories
-                ]
+            import re
+            # 支援格式： "100", "飲食 100", "100 飲食", "飲食100晚餐"
+            match = re.match(r"([^\d]*)\s*(\d+)\s*(.*)", text)
+            
+            if not match:
                 line_bot_api.reply_message(ReplyMessageRequest(
                     reply_token=event.reply_token,
-                    messages=[TextMessage(text=f"💵 已輸入金額 ${amount}，請選擇類別：", quick_reply=QuickReply(items=quick_reply_items))]
+                    messages=[TextMessage(text="❌ 格式需要修正~\n請輸入例如：飲食 100")]
                 ))
                 return
 
-            try:
-                if len(parts) < 2: raise ValueError()
-                category, amount = parts[0], int(parts[1])
-                memo = " ".join(parts[2:]) if len(parts) > 2 else ""
+            prefix = match.group(1).strip()
+            amount_str = match.group(2)
+            amount = int(amount_str)
+            suffix = match.group(3).strip()
 
-                # 預算檢查
+            # 判定哪個部分是「類別」，哪個部分是「備註」
+            category = None
+            memo = ""
+
+            if prefix in categories:
+                category = prefix
+                memo = suffix
+            elif suffix in categories:
+                category = suffix
+                memo = prefix
+            elif not prefix and not suffix:
+                # A. 只有數字 -> 啟動快速類別選單
+                quick_reply_items = [
+                    QuickReplyItem(
+                        action=MessageAction(label=cat, text=f"{cat} {amount_str}")
+                    ) for cat in categories
+                ]
+                line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(
+                        text=f"💵 金額：${amount_str}\n請選擇消費類別：",
+                        quick_reply=QuickReply(items=quick_reply_items)
+                    )]
+                ))
+                return
+            else:
+                # 有文字但不在定義的類別內，當作只有金額與備註
+                memo = f"{prefix} {suffix}".strip()
+
+            # B. 處理存檔與預算檢查
+            if category:
                 budgets = get_user_budgets(user_id)
                 limit = budgets.get(category)
-                if limit is None:
-                    line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=f"⚠️ 請先設定【{category}】的額度再記帳。")]))
+
+                # 強制預算檢查：沒設定就不給記
+                if limit is None or int(limit) <= 0:
+                    reply_text = f"⚠️ 記帳失敗！\n您尚未設定【{category}】的每月額度。\n請先設定額度後再記錄這筆消費。"
+                    # 貼心功能：直接給他一個設定按鈕
+                    quick_set_qr = QuickReply(items=[
+                        QuickReplyItem(action=MessageAction(label=f"設定{category}額度", text=f"設定 {category} "))
+                    ])
+                    line_bot_api.reply_message(ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_text, quick_reply=quick_set_qr)]
+                    ))
                     return
 
+                # 執行存檔
                 add_transaction(user_id, {"category": category, "amount": amount, "type": "expense", "memo": memo})
+
+                # 檢查預算進度
                 summary = get_monthly_summary(user_id)
-                curr_total, limit = summary.get(category, 0), int(limit)
+                curr_total = summary.get(category, 0)
+                limit = int(limit)
                 
+                status_icon = "✅"
                 warning = ""
-                if curr_total >= limit: warning = f"\n\n⚠️ 警告：{category}已達額度！"
-                elif curr_total >= limit * 0.8: warning = f"\n\n🔔 提醒：{category}已達 80%！"
+                if curr_total > limit:
+                    status_icon = "🚨"
+                    warning = f"\n\n💀 嚴重警告！{category}已爆表\n額度：${limit} / 已花：${curr_total}"
+                elif curr_total >= limit * 0.8:
+                    status_icon = "⚠️"
+                    warning = f"\n\n🔔 提醒：{category}額度已達 {int((curr_total/limit)*100)}%"
 
-                reply_text = f"✅ 已記錄\n類別：{category}\n金額：{amount}\n備註：{memo if memo else '無'}" + warning
-            except:
-                reply_text = "❌ 格式錯誤。"
+                reply_text = f"{status_icon} 已記錄支出\n類別：{category}\n金額：${amount}\n備註：{memo if memo else '無'}" + warning
+            else:
+                # 雖然輸入了文字但匹配不到類別
+                reply_text = f"❓ 找不到【{prefix if prefix else suffix}】這個類別\n目前支援：{', '.join(categories)}"
 
-            line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]))
-
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply_text)]
+            ))
 # --- 圖文選單建立 ---
 def create_rich_menu():
     with ApiClient(configuration) as api_client:
