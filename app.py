@@ -51,7 +51,7 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
 
-        # --- A. 處理「圖表」按鈕點擊 ---
+        # 1. 處理「圖表」
         if text == "圖表":
             records = get_user_transactions(user_id)
             chart_url = generate_expense_pie_chart(records)
@@ -74,39 +74,20 @@ def handle_message(event):
                     )
                 )
             return
-
-        # --- B. 原有的記帳功能邏輯 ---
-        try:
-            parts = text.split()
-            if len(parts) < 2:
-                raise ValueError("格式錯誤")
-
-            category = parts[0]
-            amount = int(parts[1])
-            memo = " ".join(parts[2:]) if len(parts) > 2 else ""
-
-            data = {
-                "category": category,
-                "amount": amount,
-                "type": "expense",
-                "memo": memo
-            }
-
-            add_transaction(user_id, data)
-            reply_text = f"✅ 已記錄\n類別：{category}\n金額：{amount}\n備註：{memo if memo else '無'}"
-
-        except Exception as e:
-            # 如果不是符合記帳格式，也不是「圖表」，才噴錯誤訊息
-            reply_text = "❌ 輸入格式錯誤\n請輸入：餐飲 120 炒飯\n或點選選單中的「圖表」按鈕"
         
-        if text == "本月花費":
+        # 2. 處理「本月花費」
+        elif text == "本月花費":
             summary = get_monthly_summary(user_id)
+            budgets = get_user_budgets(user_id)
             if not summary:
                 reply_msg = "本月尚無消費紀錄。"
             else:
                 reply_msg = "💰 本月消費摘要：\n"
                 for cat, amt in summary.items():
-                    reply_msg += f"• {cat}: ${amt}\n"
+                    # 顯示格式： 類別: $目前總額 / $額度
+                    limit = budgets.get(cat)
+                    limit_str = f" / ${limit}" if limit else ""
+                    reply_msg += f"• {cat}: ${amt}{limit_str}\n"
             
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
@@ -114,22 +95,16 @@ def handle_message(event):
             ))
             return
         
-        if text == "設定額度":
-            reply_msg = "請輸入「設定 [類別] [金額]」來設定限額。\n例如：設定 餐飲 5000"
+        # 3. 處理「設定額度」按鈕點擊
+        elif text == "設定額度":
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_msg)]
+                messages=[TextMessage(text="請輸入「設定 [類別] [金額]」來設定限額。\n例如：設定 餐飲 5000")]
             ))
             return
-
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
-            )
-        )
-
-        if text.startswith("設定"):
+        
+        # 4. 處理「設定 餐飲 5000」輸入指令
+        elif text.startswith("設定"):
             try:
                 parts = text.split()
                 category = parts[1]
@@ -138,36 +113,57 @@ def handle_message(event):
                 reply_text = f"✅ 已將【{category}】的每月額度設為 ${amount}"
             except:
                 reply_text = "❌ 格式錯誤。範例：設定 餐飲 5000"
-        
-        # 4. 處理「記帳」並加入「即將超過額度」的提醒
-        try:
-            # ... 您原本解析 category, amount 的 code ...
-            # add_transaction(user_id, data) # 存入時建議補上日期
-            
-            # --- 額度檢查邏輯 ---
-            summary = get_monthly_summary(user_id)
-            budgets = get_user_budgets(user_id)
-            
-            current_cat_total = summary.get(category, 0)
-            cat_budget = budgets.get(category, 0)
-            
-            warning = ""
-            if cat_budget > 0:
-                if current_cat_total >= cat_budget:
-                    warning = f"\n\n⚠️ 警告：{category}已爆表！(額度${cat_budget})"
-                elif current_cat_total >= cat_budget * 0.8:
-                    warning = f"\n\n🔔 提醒：{category}已達額度 80%！"
-
-            reply_text = f"✅ 已記錄 {category} ${amount}" + warning
-
-        except Exception as e:
-            reply_text = "❌ 請輸入正確格式或點選選單"
             
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=reply_text)]
             ))
             return
+
+        # 5. 處理「記帳功能」（前面的關鍵字都沒中，就進入記帳判斷）
+        else:
+            try:
+                parts = text.split()
+                if len(parts) < 2:
+                    raise ValueError("格式錯誤")
+
+                category = parts[0]
+                amount = int(parts[1])
+                memo = " ".join(parts[2:]) if len(parts) > 2 else ""
+
+                # A. 執行存檔
+                data = {
+                    "category": category,
+                    "amount": amount,
+                    "type": "expense",
+                    "memo": memo
+                }
+                add_transaction(user_id, data)
+
+                # B. 檢查額度與提醒
+                summary = get_monthly_summary(user_id)
+                budgets = get_user_budgets(user_id)
+                
+                current_cat_total = summary.get(category, 0)
+                cat_budget = budgets.get(category)
+                
+                warning = ""
+                if cat_budget:
+                    cat_budget = int(cat_budget)
+                    if current_cat_total >= cat_budget:
+                        warning = f"\n\n⚠️ 警告：{category}已達額度！(${current_cat_total}/${cat_budget})"
+                    elif current_cat_total >= cat_budget * 0.8:
+                        warning = f"\n\n🔔 提醒：{category}已達 80%！"
+
+                reply_text = f"✅ 已記錄\n類別：{category}\n金額：{amount}\n備註：{memo if memo else '無'}" + warning
+
+            except Exception:
+                reply_text = "❌ 輸入格式錯誤\n請輸入：[類別] [金額] [備註]\n或點選選單功能"
+
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply_text)]
+            ))
 
 # Rich Menu 建立程式碼 (保留你原本的邏輯)
 def create_rich_menu():
