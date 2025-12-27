@@ -43,7 +43,27 @@ def callback():
 
 @handler.add(FollowEvent)
 def handle_follow(event):
-    print(f'新好友加入: {event.source.user_id}')
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+        
+        # 定義歡迎文字
+        welcome_text = (
+            "🌟 您好！歡迎使用「記帳助手」🌟\n\n"
+            "🚀 快速上手指南：\n"
+            "1.【直接記帳】：輸入「金額 備註」，例如「100 宵夜」\n"
+            "2.【選擇類別】：輸入金額後點選彈出的按鈕\n"
+            "3.【設定預算】：輸入「設定 類別 金額」，例如「設定 飲食 5000」\n"
+            "4.【查看報告】：點擊下方選單按鈕\n\n"
+            "💡 現在就輸入一個數字試試看吧！"
+        )
+        
+        # 回覆訊息
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=welcome_text)]
+            )
+        )
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
@@ -52,6 +72,7 @@ def handle_message(event):
     
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
+        categories = ["飲食", "娛樂", "運動", "交通", "健康", "其他"]
 
         # 1. 功能：生成圓餅圖
         if text == "圖表":
@@ -92,7 +113,7 @@ def handle_message(event):
         elif text == "設定額度":
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text="請輸入「設定 [類別] [金額]」\n例如：設定 飲食 5000")]
+                messages=[TextMessage(text="💰 欲設定每月預算，請直接輸入金額：\n")]
             ))
             return
         
