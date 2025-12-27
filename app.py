@@ -221,21 +221,36 @@ def handle_message(event):
                 category, amount = parts[0], int(parts[1])
                 memo = " ".join(parts[2:]) if len(parts) > 2 else ""
 
+                # 強制預算檢查邏輯
+                budgets = get_user_budgets(user_id)
+                limit = budgets.get(category)
+
+                if limit is None or int(limit) <= 0:
+                    # 如果沒設定預算，攔截並提示
+                    reply_text = (
+                        f"⚠️ 記帳失敗！\n"
+                        f"您尚未設定【{category}】的每月額度。\n\n"
+                        f"請先設定額度再記帳，例如輸入：\n"
+                        f"設定 {category} 5000"
+                    )
+                    line_bot_api.reply_message(ReplyMessageRequest(
+                        reply_token=event.reply_token,
+                        messages=[TextMessage(text=reply_text)]
+                    ))
+                    return # 直接結束，不執行下方的 add_transaction
+
                 add_transaction(user_id, {"category": category, "amount": amount, "type": "expense", "memo": memo})
 
                 # 預算警示檢查
                 summary = get_monthly_summary(user_id)
-                budgets = get_user_budgets(user_id)
                 curr_total = summary.get(category, 0)
-                limit = budgets.get(category)
                 
                 warning = ""
-                if limit:
-                    limit = int(limit)
-                    if curr_total >= limit:
-                        warning = f"\n\n⚠️ 警告：{category}已達額度！(${curr_total}/${limit})"
-                    elif curr_total >= limit * 0.8:
-                        warning = f"\n\n🔔 提醒：{category}已達 80%！"
+                limit = int(limit)
+                if curr_total >= limit:
+                    warning = f"\n\n⚠️ 警告：{category}已達額度！(${curr_total}/${limit})"
+                elif curr_total >= limit * 0.8:
+                    warning = f"\n\n🔔 提醒：{category}已達 80%！"
 
                 reply_text = f"✅ 已記錄\n類別：{category}\n金額：{amount}\n備註：{memo if memo else '無'}" + warning
 
