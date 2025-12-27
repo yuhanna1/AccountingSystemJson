@@ -38,5 +38,37 @@
     "type": "expense",
     "memo": "便當",
     "time": "2025-12-27 19:42:07"
+  },
+  {
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "餐飲",
+    "amount": 1000,
+    "type": "expense",
+    "memo": "吃飯",
+    "time": "2025-12-27 20:12:29"
+  },
+  {
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "餐飲",
+    "amount": 3000,
+    "type": "expense",
+    "memo": "吃飯",
+    "time": "2025-12-27 20:12:59"
+  },
+  {
+    "user_id": "Udf4901a54aebd9b6377e1c5ac8dafaa2",
+    "category": "飲食",
+    "amount": 500,
+    "type": "expense",
+    "memo": "晚餐",
+    "time": "2025-12-27 20:21:06"
+  },
+  {
+    "user_id": "U4cca34c4054c5a898d3050d0af84dd45",
+    "category": "飲食",
+    "amount": 100,
+    "type": "expense",
+    "memo": "牛肉麵",
+    "time": "2025-12-27 20:21:41"
   }
 ]

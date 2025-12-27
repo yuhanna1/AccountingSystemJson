@@ -7,14 +7,12 @@ from linebot.v3 import WebhookHandler
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest,
-    TextMessage, ImageMessage, MessagingApiBlob
+    TextMessage, ImageMessage, MessagingApiBlob,
+    QuickReply, QuickReplyItem, MessageAction
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
 
-# 匯入你的服務模組
-from services.json_store import add_transaction, get_user_transactions
-from services.chart import generate_expense_pie_chart
-
+# 匯入自定義服務模組
 from services.json_store import (
     add_transaction, 
     get_user_transactions, 
@@ -22,12 +20,16 @@ from services.json_store import (
     get_user_budgets, 
     get_monthly_summary
 )
+from services.chart import generate_expense_pie_chart
 
 app = Flask(__name__)
 
+# --- 配置資訊 ---
 CHANNEL_ACCESS_TOKEN = 'LAU/pl0+Tk9yP0KOr4u4AVE6bAf/xJRGsx8zTCzYj6JwsOjgzdvx964IvNZS6cpCEsxJeR/kaGJDVJsEEd9m6TVZZvotBYbB+8V75nw1alI1CMqYiZgkLRG6lLDk3Wa/IIIQTxPtoQRnhutopzppcQdB04t89/1O/w1cDnyilFU='
+CHANNEL_SECRET = '7d9c922a4e31502546357a3109a4d6e4'
+
 configuration = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
-handler = WebhookHandler('7d9c922a4e31502546357a3109a4d6e4')
+handler = WebhookHandler(CHANNEL_SECRET)
 
 @app.route("/callback", methods=['POST'])
 def callback():
@@ -41,7 +43,7 @@ def callback():
 
 @handler.add(FollowEvent)
 def handle_follow(event):
-    print(f'Got {event.type} event')
+    print(f'新好友加入: {event.source.user_id}')
 
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
@@ -51,31 +53,23 @@ def handle_message(event):
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
 
-        # 1. 處理「圖表」
+        # 1. 功能：生成圓餅圖
         if text == "圖表":
             records = get_user_transactions(user_id)
             chart_url = generate_expense_pie_chart(records)
             
             if chart_url:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[
-                            TextMessage(text="📊 這是您的消費分析圓餅圖："),
-                            ImageMessage(original_content_url=chart_url, preview_image_url=chart_url)
-                        ]
-                    )
-                )
+                messages = [
+                    TextMessage(text="📊 這是您的消費分析圓餅圖："),
+                    ImageMessage(original_content_url=chart_url, preview_image_url=chart_url)
+                ]
             else:
-                line_bot_api.reply_message(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text="查無消費紀錄，請先開始記帳喔！")]
-                    )
-                )
+                messages = [TextMessage(text="查無紀錄，請先開始記帳喔！")]
+            
+            line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=messages))
             return
         
-        # 2. 處理「本月花費」
+        # 2. 功能：查看本月摘要與額度狀態
         elif text == "本月花費":
             summary = get_monthly_summary(user_id)
             budgets = get_user_budgets(user_id)
@@ -84,9 +78,8 @@ def handle_message(event):
             else:
                 reply_msg = "💰 本月消費摘要：\n"
                 for cat, amt in summary.items():
-                    # 顯示格式： 類別: $目前總額 / $額度
                     limit = budgets.get(cat)
-                    limit_str = f" / ${limit}" if limit else ""
+                    limit_str = f" / 限額 ${limit}" if limit else ""
                     reply_msg += f"• {cat}: ${amt}{limit_str}\n"
             
             line_bot_api.reply_message(ReplyMessageRequest(
@@ -95,91 +88,100 @@ def handle_message(event):
             ))
             return
         
-        # 3. 處理「設定額度」按鈕點擊
+        # 3. 功能：設定預算限額
         elif text == "設定額度":
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text="請輸入「設定 [類別] [金額]」來設定限額。\n例如：設定 餐飲 5000")]
+                messages=[TextMessage(text="請輸入「設定 [類別] [金額]」\n例如：設定 飲食 5000")]
             ))
             return
         
-        # 4. 處理「設定 餐飲 5000」輸入指令
         elif text.startswith("設定"):
             try:
                 parts = text.split()
-                category = parts[1]
-                amount = int(parts[2])
+                category, amount = parts[1], int(parts[2])
                 set_budget(user_id, category, amount)
                 reply_text = f"✅ 已將【{category}】的每月額度設為 ${amount}"
             except:
-                reply_text = "❌ 格式錯誤。範例：設定 餐飲 5000"
+                reply_text = "❌ 格式錯誤。範例：設定 飲食 5000"
             
-            line_bot_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
-            ))
+            line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]))
             return
 
-        # 5. 處理「記帳功能」（前面的關鍵字都沒中，就進入記帳判斷）
+        # 4. 核心功能：記帳與快速回應 (Quick Reply)
         else:
+            parts = text.split()
+            if not parts: return
+
+            # A. 判斷是否為「金額優先」模式 (例如輸入 "100 宵夜")
+            if parts[0].isdigit():
+                amount = parts[0]
+                memo = " ".join(parts[1:]) if len(parts) > 1 else ""
+                
+                # 定義快速回應按鈕
+                categories = ["飲食", "娛樂", "運動", "交通", "健康", "其他"]
+                quick_reply_items = [
+                    QuickReplyItem(
+                        action=MessageAction(label=cat, text=f"{cat} {amount} {memo}".strip())
+                    ) for cat in categories
+                ]
+                
+                line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(
+                        text=f"💵 已輸入金額 ${amount}，請選擇類別：",
+                        quick_reply=QuickReply(items=quick_reply_items)
+                    )]
+                ))
+                return
+
+            # B. 處理完整格式 (例如由快速回應觸發的 "飲食 100 宵夜")
             try:
-                parts = text.split()
-                if len(parts) < 2:
-                    raise ValueError("格式錯誤")
+                if len(parts) < 2: raise ValueError()
 
                 category = parts[0]
                 amount = int(parts[1])
                 memo = " ".join(parts[2:]) if len(parts) > 2 else ""
 
-                # A. 執行存檔
-                data = {
-                    "category": category,
-                    "amount": amount,
-                    "type": "expense",
-                    "memo": memo
-                }
-                add_transaction(user_id, data)
+                # 存檔
+                add_transaction(user_id, {"category": category, "amount": amount, "type": "expense", "memo": memo})
 
-                # B. 檢查額度與提醒
+                # 預算警示檢查
                 summary = get_monthly_summary(user_id)
                 budgets = get_user_budgets(user_id)
-                
-                current_cat_total = summary.get(category, 0)
-                cat_budget = budgets.get(category)
+                curr_total = summary.get(category, 0)
+                limit = budgets.get(category)
                 
                 warning = ""
-                if cat_budget:
-                    cat_budget = int(cat_budget)
-                    if current_cat_total >= cat_budget:
-                        warning = f"\n\n⚠️ 警告：{category}已達額度！(${current_cat_total}/${cat_budget})"
-                    elif current_cat_total >= cat_budget * 0.8:
+                if limit:
+                    limit = int(limit)
+                    if curr_total >= limit:
+                        warning = f"\n\n⚠️ 警告：{category}已達額度！(${curr_total}/${limit})"
+                    elif curr_total >= limit * 0.8:
                         warning = f"\n\n🔔 提醒：{category}已達 80%！"
 
                 reply_text = f"✅ 已記錄\n類別：{category}\n金額：{amount}\n備註：{memo if memo else '無'}" + warning
 
-            except Exception:
-                reply_text = "❌ 輸入格式錯誤\n請輸入：[類別] [金額] [備註]\n或點選選單功能"
+            except:
+                reply_text = "❌ 格式錯誤\n請輸入「金額 備註」或點選選單功能。"
 
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[TextMessage(text=reply_text)]
             ))
 
-# Rich Menu 建立程式碼 (保留你原本的邏輯)
+# --- 圖文選單建立 (執行一次即可) ---
 def create_rich_menu():
     with ApiClient(configuration) as api_client:
         line_bot_api = MessagingApi(api_client)
         line_bot_blob_api = MessagingApiBlob(api_client)
 
-        headers = {
-            'Authorization': 'Bearer ' + CHANNEL_ACCESS_TOKEN,
-            'Content-Type': 'application/json'
-        }
+        headers = {'Authorization': 'Bearer ' + CHANNEL_ACCESS_TOKEN, 'Content-Type': 'application/json'}
         body = {
             "size": {"width": 2500, "height": 843},
             "selected": True,
-            "name": "圖文選單 1",
-            "chatBarText": "查看更多資訊",
+            "name": "記帳小幫手選單",
+            "chatBarText": "點我開始記帳",
             "areas": [
                 {"bounds": {"x": 0, "y": 0, "width": 841, "height": 843}, "action": {"type": "message", "text": "設定額度"}},
                 {"bounds": {"x": 836, "y": 0, "width": 832, "height": 843}, "action": {"type": "message", "text": "本月花費"}},
@@ -188,18 +190,15 @@ def create_rich_menu():
         }
 
         try:
-            response = requests.post('https://api.line.me/v2/bot/richmenu', headers=headers, data=json.dumps(body).encode('utf-8'))
-            rich_menu_id = response.json()['richMenuId']
-            with open('static/richmenu-1.png', 'rb') as image:
-                line_bot_blob_api.set_rich_menu_image(
-                    rich_menu_id=rich_menu_id,
-                    body=bytearray(image.read()),
-                    _headers={'Content-Type': 'image/png'}
-                )
-            line_bot_api.set_default_rich_menu(rich_menu_id)
-        except Exception as e:
-            print(f"Rich Menu Set Error or Already Exists: {e}")
+            res = requests.post('https://api.line.me/v2/bot/richmenu', headers=headers, data=json.dumps(body).encode('utf-8'))
+            rid = res.json()['richMenuId']
+            with open('static/richmenu-1.png', 'rb') as img:
+                line_bot_blob_api.set_rich_menu_image(rich_menu_id=rid, body=bytearray(img.read()), _headers={'Content-Type': 'image/png'})
+            line_bot_api.set_default_rich_menu(rid)
+            print("Rich Menu 建立成功")
+        except:
+            print("Rich Menu 可能已存在")
 
 if __name__ == "__main__":
-    create_rich_menu() # 如果選單已設定好可註解掉
-    app.run()
+    # create_rich_menu() # 第一次執行後可註解掉
+    app.run(port=5000)
