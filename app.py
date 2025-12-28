@@ -20,8 +20,8 @@ app = Flask(__name__)
 CHANNEL_ACCESS_TOKEN = 'LAU/pl0+Tk9yP0KOr4u4AVE6bAf/xJRGsx8zTCzYj6JwsOjgzdvx964IvNZS6cpCEsxJeR/kaGJDVJsEEd9m6TVZZvotBYbB+8V75nw1alI1CMqYiZgkLRG6lLDk3Wa/IIIQTxPtoQRnhutopzppcQdB04t89/1O/w1cDnyilFU='
 CHANNEL_SECRET = '7d9c922a4e31502546357a3109a4d6e4'
 
-config = Configuration(access_token='CHANNEL_ACCESS_TOKEN')
-handler = WebhookHandler('CHANNEL_SECRET')
+config = Configuration(access_token=CHANNEL_ACCESS_TOKEN)
+handler = WebhookHandler(CHANNEL_SECRET)
 
 # 定義重複使用的教學訊息
 WELCOME_TEXT = (

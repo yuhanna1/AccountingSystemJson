@@ -2,8 +2,7 @@ import re
 from urllib.parse import parse_qsl
 from datetime import datetime
 from linebot.v3.messaging import (
-    Configuration, ApiClient, MessagingApi, ReplyMessageRequest,
-    TextMessage, ImageMessage, MessagingApiBlob,
+    ReplyMessageRequest, TextMessage, ImageMessage,
     QuickReply, QuickReplyItem, MessageAction,
     FlexMessage, FlexContainer, ConfirmTemplate,
     TemplateMessage, PostbackAction
@@ -23,7 +22,6 @@ import flex_templates as flex
 
 CATEGORIES = ["飲食", "娛樂", "運動", "交通", "健康", "其他"]
 
-# 定義重複使用的教學訊息
 WELCOME_TEXT = (
     "🌟 您好！歡迎使用「記帳助手」🌟\n\n"
     "🚀 快速上手指南：\n"
@@ -38,7 +36,7 @@ def handle_text_logic(api, event):
     user_id = event.source.user_id
     text = event.message.text.strip()
 
-    # 1. 功能：生成圓餅圖
+    # --- 1. 固定指令判斷 ---
     if text == "圖表":
         records = get_user_transactions(user_id)
         chart_url = generate_expense_pie_chart(records)
@@ -52,7 +50,6 @@ def handle_text_logic(api, event):
         api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=messages))
         return
     
-    # 2. 功能：使用教學 (點擊 Rich Menu 或輸入觸發)
     elif text == "使用教學":
         api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
@@ -60,7 +57,6 @@ def handle_text_logic(api, event):
         ))
         return
     
-    # 3. 功能：本月花費明細 (Flex Message)
     elif text == "本月花費":
         records = get_user_transactions(user_id)
         this_month = datetime.now().strftime("%Y-%m")
@@ -89,7 +85,7 @@ def handle_text_logic(api, event):
                             "type": "postback",
                             "label": "刪除",
                             "data": f"action=ask_delete&id={r['id']}&desc={r['category']}${r['amount']}",
-                            "displayText": f"想刪除 {r['category']} ${r['amount']}" # 讓使用者知道自己點了哪個
+                            "displayText": f"想刪除 {r['category']} ${r['amount']}"
                         }
                     }
                 ]
@@ -105,15 +101,15 @@ def handle_text_logic(api, event):
             },
             "body": {"type": "box", "layout": "vertical", "contents": contents[:-1]}
         }
-
         api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
             messages=[FlexMessage(alt_text="本月消費明細", contents=FlexContainer.from_dict(flex_bubble))]
         ))
         return
     
-    if text == "設定額度":
-        budgets = get_user_budgets(user_id) # 呼叫匯入的函式
+    elif text == "設定額度":
+        budgets = get_user_budgets(user_id)
+        # 直接調用 flex_templates 裡的導引卡片，保持代碼乾淨
         bubble = flex.budget_setup_guide(CATEGORIES, budgets)
         api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
@@ -121,143 +117,43 @@ def handle_text_logic(api, event):
         ))
         return
 
-    # 功能：預算設定執行
+    # --- 2. 前綴指令判斷 ---
     elif text.startswith("設定"):
         parts = text.split()
         if len(parts) == 2:
-            cat = parts[1]
+            category = parts[1]
             qr = QuickReply(items=[
-                QuickReplyItem(action=MessageAction(label=p, text=f"設定 {cat} {p}")) for p in ["3000", "5000", "10000"]
+                QuickReplyItem(action=MessageAction(label=p, text=f"設定 {category} {p}")) for p in ["3000", "5000", "8000", "10000"]
             ])
             api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
-                messages=[TextMessage(text=f"請選擇【{cat}】的每月預算：", quick_reply=qr)]
+                messages=[TextMessage(text=f"請選擇【{category}】的每月預算：", quick_reply=qr)]
             ))
         elif len(parts) >= 3:
             try:
-                cat, amount = parts[1], int(parts[2])
-                set_budget(user_id, cat, amount)
-                api.reply_message(ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=f"✅ 【{cat}】額度已設為 ${amount}")]
-                ))
+                category, amount = parts[1], int(parts[2])
+                set_budget(user_id, category, amount)
+                reply_text = f"✅ 【{category}】額度設定成功！\n每月預算為：${amount}"
             except:
-                api.reply_message(ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="❌ 格式錯誤。範例：設定 飲食 5000")]
-                ))
+                reply_text = "❌ 設定格式錯誤。\n範例：設定 飲食 5000"
+            api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]))
         return
     
-    # 4. 功能：刪除與預算設定邏輯
     elif text.startswith("刪除"):
         parts = text.split()
         if len(parts) == 2:
-            res_text = "✅ 紀錄已成功刪除！" if delete_transaction(user_id, parts[1]) else "❌ 刪除失敗。"
+            res_text = "✅ 紀錄已成功刪除！" if delete_transaction(user_id, parts[1]) else "❌ 刪除失敗，找不到該 ID。"
         else:
             res_text = "⚠️ 格式：刪除 [ID]"
         api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=res_text)]))
         return
     
-    elif text == "設定額度":
-        budgets = get_user_budgets(user_id)
-        guide_contents = []
-
-        guide_contents.append({
-            "type": "text", "text": "🎯 預算初始化設定", "weight": "bold", "size": "lg", "margin": "md"
-        })
-        guide_contents.append({
-            "type": "text", "text": "請點擊下方類別設定每月額度：", "size": "xs", "color": "#aaaaaa", "margin": "sm"
-        })
-        guide_contents.append({"type": "separator", "margin": "md"})
-        
-        for cat in CATEGORIES:
-            current_limit = budgets.get(cat)
-            is_set = current_limit is not None and int(current_limit) > 0
-            
-            status_text = f"目前：${current_limit}" if is_set else "🔴 尚未設定"
-            btn_label = "修改" if is_set else "設定"
-            
-            item_box = {
-                "type": "box", "layout": "horizontal", "margin": "lg", "spacing": "sm",
-                "contents": [
-                    {
-                        "type": "box", "layout": "vertical", "flex": 3,
-                        "contents": [
-                            {"type": "text", "text": cat, "weight": "bold", "size": "sm"},
-                            {"type": "text", "text": status_text, "size": "xs", "color": "#888888"}
-                        ]
-                    },
-                    {
-                        "type": "button", "style": "primary" if not is_set else "secondary",
-                        "height": "sm", "flex": 2, "color": "#1DB446" if not is_set else "#eeeeee",
-                        "action": {
-                            "type": "message", "label": btn_label, "text": f"設定 {cat} "
-                        }
-                    }
-                ]
-            }
-            guide_contents.append(item_box)
-
-        # 發送 Flex Message
-        api.reply_message(ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[
-                FlexMessage(
-                    alt_text="快速預算設定導引",
-                    contents=FlexContainer.from_dict({
-                        "type": "bubble",
-                        "body": {"type": "box", "layout": "vertical", "contents": guide_contents}
-                    })
-                )
-            ]
-        ))
-        return
-    
-    elif text.startswith("設定"):
-            parts = text.split()
-
-            # 如果只有「設定 類別」，彈出 Quick Reply 選金額
-            if len(parts) == 2:
-                category = parts[1]
-                reply_text = f"請選擇【{category}】的每月預算金額，或直接輸入數字："
-                
-                quick_set_qr = QuickReply(items=[
-                    QuickReplyItem(action=MessageAction(label="3000", text=f"設定 {category} 3000")),
-                    QuickReplyItem(action=MessageAction(label="5000", text=f"設定 {category} 5000")),
-                    QuickReplyItem(action=MessageAction(label="8000", text=f"設定 {category} 8000")),
-                    QuickReplyItem(action=MessageAction(label="10000", text=f"設定 {category} 10000")),
-                    QuickReplyItem(action=MessageAction(label="自定義", text=f"設定 {category} "))
-                ])
-
-                api.reply_message(ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text, quick_reply=quick_set_qr)]
-                ))
-                return
-            
-            # 如果已經有金額了 (parts 長度為 3)，則正常執行設定
-            try:
-                if len(parts) < 3:
-                    raise ValueError("缺少金額")
-                
-                category, amount = parts[1], int(parts[2])
-                set_budget(user_id, category, amount)
-                reply_text = f"✅ 【{category}】額度設定成功！\n每月預算為：${amount}"
-            except:
-                reply_text = "❌ 設定格式：設定 類別 金額\n例如：設定 飲食 5000"
-            
-            api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text=reply_text)]))
-            return
-    
-
-    # 5. 核心：金額輸入觸發 Quick Reply
+    # --- 3. 核心：金額與記帳邏輯 (模糊匹配) ---
     else:
         match = re.search(r"(\d+)", text)
-        
         if not match:
-            # 如果不是數字，也不是預設指令，就不回應或給予教學提示
-            return 
-        
+            return # 非數字且非指令，不予理會
+
         amount = match.group(1)
         remaining_text = text.replace(amount, "").strip()
 
@@ -267,7 +163,7 @@ def handle_text_logic(api, event):
                 found_category = cat
                 break
 
-        # A. 找不到類別 -> 彈出 Quick Reply
+        # A. 找不到類別 -> 彈出 Quick Reply 詢問
         if not found_category:
             memo = remaining_text
             quick_reply_items = [
@@ -290,7 +186,6 @@ def handle_text_logic(api, event):
             budgets = get_user_budgets(user_id)
             limit = budgets.get(category)
 
-            # 未設預算時的處理
             if limit is None or int(limit) <= 0:
                 qr = QuickReply(items=[
                     QuickReplyItem(action=MessageAction(label=p, text=f"設定 {category} {p}")) for p in ["3000", "5000", "8000"]
@@ -301,34 +196,32 @@ def handle_text_logic(api, event):
                 ))
                 return
 
-            # 已有預算，正常存檔
+            # 正常存檔
             add_transaction(user_id, {"category": category, "amount": int(amount), "type": "expense", "memo": memo})
             
-            # 計算預算進度百分比
+            # 計算進度
             summary = get_monthly_summary(user_id)
             curr_total = summary.get(category, 0)
-            limit = int(limit)
-            percent = min(100, int((curr_total / limit) * 100)) if limit > 0 else 0
+            limit_val = int(limit)
+            percent = min(100, int((curr_total / limit_val) * 100)) if limit_val > 0 else 0
             color = "#FF334B" if percent >= 100 else ("#F7AF1D" if percent >= 80 else "#1DB446")
             
-            # 呼叫 Flex 模板產生成功卡片
+            # 回傳成功卡片
             success_bubble = flex.record_success_card(category, amount, memo, percent, color)
-            
             api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
                 messages=[FlexMessage(alt_text="記帳成功", contents=FlexContainer.from_dict(success_bubble))]
             ))
 
 def handle_postback_logic(api, event):
+    # (此部分與你原本的代碼一致，邏輯正確)
     data = event.postback.data
     params = dict(parse_qsl(data))
     user_id = event.source.user_id
 
-    # 1. 第一步：詢問是否確定刪除
     if params.get('action') == 'ask_delete':
         transaction_id = params.get('id')
         desc = params.get('desc')
-
         confirm_template = ConfirmTemplate(
             text=f"確定要刪除這筆紀錄嗎？\n({desc})",
             actions=[
@@ -341,10 +234,8 @@ def handle_postback_logic(api, event):
             messages=[TemplateMessage(alt_text="確認刪除", template=confirm_template)]
         ))
 
-    # 2. 第二步：使用者點擊「確定刪除」
     elif params.get('action') == 'confirm_delete':
         success = delete_transaction(user_id, params.get('id'))
-
         msg = "✅ 已成功刪除紀錄！" if success else "❌ 刪除失敗。"
         api.reply_message(ReplyMessageRequest(
             reply_token=event.reply_token,
