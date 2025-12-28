@@ -241,6 +241,7 @@ def handle_message(event):
                     ]
                 }
                 guide_contents.append(item_box)
+
             # 發送 Flex Message
             line_bot_api.reply_message(ReplyMessageRequest(
                 reply_token=event.reply_token,
@@ -257,16 +258,35 @@ def handle_message(event):
             return
         
         elif text.startswith("設定"):
-            try:
-                parts = text.split()
+            parts = text.split()
 
+            # 如果只有「設定 類別」，彈出 Quick Reply 選金額
+            if len(parts) == 2:
+                category = parts[1]
+                reply_text = f"請選擇【{category}】的每月預算金額，或直接輸入數字："
+                
+                quick_set_qr = QuickReply(items=[
+                    QuickReplyItem(action=MessageAction(label="3000", text=f"設定 {category} 3000")),
+                    QuickReplyItem(action=MessageAction(label="5000", text=f"設定 {category} 5000")),
+                    QuickReplyItem(action=MessageAction(label="8000", text=f"設定 {category} 8000")),
+                    QuickReplyItem(action=MessageAction(label="10000", text=f"設定 {category} 10000")),
+                    QuickReplyItem(action=MessageAction(label="自定義", text=f"設定 {category} "))
+                ])
+
+                line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text, quick_reply=quick_set_qr)]
+                ))
+                return
+            
+            # 如果已經有金額了 (parts 長度為 3)，則正常執行設定
+            try:
                 if len(parts) < 3:
                     raise ValueError("缺少金額")
-
+                
                 category, amount = parts[1], int(parts[2])
                 set_budget(user_id, category, amount)
-
-                reply_text = f"✅ 【{category}】額度設定成功！\n現在您可以開始記錄這筆花費了。"
+                reply_text = f"✅ 【{category}】額度設定成功！\n每月預算為：${amount}"
             except:
                 reply_text = "❌ 設定格式：設定 類別 金額\n例如：設定 飲食 5000"
             
