@@ -46,7 +46,7 @@ def record_success_card(category, amount, memo, percent, color):
     
     return {
         "type": "bubble",
-        "size": "sm",
+        "size": "mega",
         "body": {
             "type": "box",
             "layout": "vertical",
