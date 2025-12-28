@@ -157,7 +157,57 @@ def handle_message(event):
             return
         
         elif text == "設定額度":
-            line_bot_api.reply_message(ReplyMessageRequest(reply_token=event.reply_token, messages=[TextMessage(text="💰 請輸入「設定 類別 金額」\n例如：設定 飲食 5000")]))
+            budgets = get_user_budgets(user_id)
+            guide_contents = []
+
+            guide_contents.append({
+                "type": "text", "text": "🎯 預算初始化設定", "weight": "bold", "size": "lg", "margin": "md"
+            })
+            guide_contents.append({
+                "type": "text", "text": "請點擊下方類別設定每月額度：", "size": "xs", "color": "#aaaaaa", "margin": "sm"
+            })
+            guide_contents.append({"type": "separator", "margin": "md"})
+            
+            for cat in categories:
+                current_limit = budgets.get(cat)
+                is_set = current_limit is not None and int(current_limit) > 0
+                
+                status_text = f"目前：${current_limit}" if is_set else "🔴 尚未設定"
+                btn_label = "修改" if is_set else "設定"
+                
+                item_box = {
+                    "type": "box", "layout": "horizontal", "margin": "lg", "spacing": "sm",
+                    "contents": [
+                        {
+                            "type": "box", "layout": "vertical", "flex": 3,
+                            "contents": [
+                                {"type": "text", "text": cat, "weight": "bold", "size": "sm"},
+                                {"type": "text", "text": status_text, "size": "xs", "color": "#888888"}
+                            ]
+                        },
+                        {
+                            "type": "button", "style": "primary" if not is_set else "secondary",
+                            "height": "sm", "flex": 2, "color": "#1DB446" if not is_set else "#eeeeee",
+                            "action": {
+                                "type": "message", "label": btn_label, "text": f"設定 {cat} "
+                            }
+                        }
+                    ]
+                }
+                guide_contents.append(item_box)
+            # 發送 Flex Message
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[
+                    FlexMessage(
+                        alt_text="快速預算設定導引",
+                        contents=FlexContainer.from_dict({
+                            "type": "bubble",
+                            "body": {"type": "box", "layout": "vertical", "contents": guide_contents}
+                        })
+                    )
+                ]
+            ))
             return
         
         elif text.startswith("設定"):
@@ -251,22 +301,51 @@ def handle_message(event):
                 summary = get_monthly_summary(user_id)
                 curr_total = summary.get(category, 0)
                 limit = int(limit)
-                
-                status_icon = "✅"
-                warning = ""
-                if curr_total > limit:
-                    status_icon = "🚨"
-                    warning = f"\n\n🚫 警告：{category}已爆表！\n(${curr_total}/${limit})"
-                elif curr_total >= limit * 0.8:
-                    status_icon = "⚠️"
-                    warning = f"\n\n🔔 提醒：{category}已達 80%！"
 
-                reply_text = f"{status_icon} 已記錄\n類別：{category}\n金額：${amount}\n備註：{memo if memo else '無'}" + warning
-            
-            line_bot_api.reply_message(ReplyMessageRequest(
-                reply_token=event.reply_token,
-                messages=[TextMessage(text=reply_text)]
-            ))
+                cat_percent = min(100, int((curr_total / limit) * 100)) if limit > 0 else 0
+                cat_bar_color = "#FF334B" if cat_percent >= 100 else ("#F7AF1D" if cat_percent >= 80 else "#1DB446")
+                
+                # 建立記帳成功的小卡片
+                success_bubble = {
+                    "type": "bubble",
+                    "size": "sm", # 使用小尺寸卡片，不占空間
+                    "body": {
+                        "type": "box", "layout": "vertical", "spacing": "md",
+                        "contents": [
+                            {"type": "text", "text": "✅ 記錄成功", "weight": "bold", "size": "md", "color": "#1DB446"},
+                            {
+                                "type": "box", "layout": "vertical",
+                                "contents": [
+                                    {"type": "text", "text": f"{category}：${amount}", "size": "xl", "weight": "bold"},
+                                    {"type": "text", "text": f"備註：{memo if memo else '無'}", "size": "xs", "color": "#aaaaaa"}
+                                ]
+                            },
+                            {"type": "separator"},
+                            {
+                                "type": "box", "layout": "vertical", "spacing": "xs",
+                                "contents": [
+                                    {
+                                        "type": "box", "layout": "horizontal",
+                                        "contents": [
+                                            {"type": "text", "text": f"{category}預算進度", "size": "xs", "color": "#888888"},
+                                            {"type": "text", "text": f"{cat_percent}%", "size": "xs", "align": "end", "color": cat_bar_color, "weight": "bold"}
+                                        ]
+                                    },
+                                    {
+                                        "type": "box", "layout": "vertical", "backgroundColor": "#eeeeee", "height": "6px", "cornerRadius": "3px",
+                                        "contents": [
+                                            {"type": "box", "layout": "vertical", "width": f"{cat_percent}%", "backgroundColor": cat_bar_color, "height": "6px", "cornerRadius": "3px"}
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+                line_bot_api.reply_message(ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text=reply_text)]
+                ))
 
 # --- 圖文選單建立 ---
 def create_rich_menu():
