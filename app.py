@@ -10,9 +10,10 @@ from linebot.v3.messaging import (
     Configuration, ApiClient, MessagingApi, ReplyMessageRequest,
     TextMessage, ImageMessage, MessagingApiBlob,
     QuickReply, QuickReplyItem, MessageAction,
-    FlexMessage, FlexContainer
+    FlexMessage, FlexContainer, ConfirmTemplate,
+    TemplateMessage, PostbackAction
 )
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, PostbackEvent
 
 # 匯入自定義服務模組
 from services.json_store import (
@@ -24,6 +25,7 @@ from services.json_store import (
     delete_transaction
 )
 from services.chart import generate_expense_pie_chart
+from urllib.parse import parse_qsl
 
 app = Flask(__name__)
 
@@ -66,6 +68,45 @@ def handle_follow(event):
                 messages=[TextMessage(text=WELCOME_TEXT)]
             )
         )
+
+@handler.add(PostbackEvent)
+def handle_postback(event):
+    data = event.postback.data
+    params = dict(parse_qsl(data)) 
+    user_id = event.source.user_id
+
+    with ApiClient(configuration) as api_client:
+        line_bot_api = MessagingApi(api_client)
+
+        # 1. 第一步：詢問是否確定刪除
+        if params.get('action') == 'ask_delete':
+            transaction_id = params.get('id')
+            description = params.get('desc')
+            
+            # 彈出確認視窗
+            confirm_template = ConfirmTemplate(
+                text=f"確定要刪除這筆紀錄嗎？\n({description})",
+                actions=[
+                    PostbackAction(label="確定刪除", data=f"action=confirm_delete&id={transaction_id}"),
+                    PostbackAction(label="取消", data="action=cancel")
+                ]
+            )
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TemplateMessage(alt_text="確認刪除", template=confirm_template)]
+            ))
+
+        # 2. 第二步：使用者點擊「確定刪除」
+        elif params.get('action') == 'confirm_delete':
+            transaction_id = params.get('id')
+            # 呼叫你原本的刪除函數
+            success = delete_transaction(user_id, transaction_id) 
+            
+            reply_text = "✅ 已成功刪除紀錄！" if success else "❌ 刪除失敗或找不到該紀錄。"
+            line_bot_api.reply_message(ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=reply_text)]
+            ))
 
 # 訊息事件
 @handler.add(MessageEvent, message=TextMessageContent)
@@ -124,7 +165,12 @@ def handle_message(event):
                         {"type": "text", "text": f"${r['amount']}", "size": "sm", "weight": "bold", "flex": 2, "align": "end", "gravity": "center"},
                         {
                             "type": "text", "text": "🗑️", "size": "lg", "flex": 1, "align": "center", "gravity": "center",
-                            "action": {"type": "message", "label": "刪除", "text": f"刪除 {r['id']}"}
+                            "action": {
+                                "type": "postback",
+                                "label": "刪除",
+                                "data": f"action=ask_delete&id={r['id']}&desc={r['category']}${r['amount']}",
+                                "displayText": f"想刪除 {r['category']} ${r['amount']}" # 讓使用者知道自己點了哪個
+                            }
                         }
                     ]
                 }
