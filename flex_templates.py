@@ -41,17 +41,21 @@ def budget_setup_guide(categories, budgets):
     }
 
 def record_success_card(category, amount, memo, percent, color):
+    # 安全檢查：確保進度條寬度不會超過 100%，且不能為負數
     display_percent = min(100, max(0, percent))
     
     return {
-        "type": "bubble", 
+        "type": "bubble",
         "size": "sm",
         "body": {
-            "type": "box", "layout": "vertical", "spacing": "md",
+            "type": "box",
+            "layout": "vertical",
+            "spacing": "md",
             "contents": [
                 {"type": "text", "text": "✅ 記錄成功", "weight": "bold", "size": "md", "color": "#1DB446"},
                 {
-                    "type": "box", "layout": "vertical", 
+                    "type": "box",
+                    "layout": "vertical",
                     "contents": [
                         {"type": "text", "text": f"{category}：${amount}", "size": "xl", "weight": "bold"},
                         {"type": "text", "text": f"備註：{memo if memo else '無'}", "size": "xs", "color": "#aaaaaa"}
@@ -59,22 +63,33 @@ def record_success_card(category, amount, memo, percent, color):
                 },
                 {"type": "separator"},
                 {
-                    "type": "box", "layout": "vertical", "spacing": "xs", 
+                    "type": "box",
+                    "layout": "vertical",
+                    "spacing": "xs",
                     "contents": [
                         {
-                            "type": "box", "layout": "horizontal", 
+                            "type": "box",
+                            "layout": "horizontal",
                             "contents": [
                                 {"type": "text", "text": f"{category}預算進度", "size": "xs", "color": "#888888"},
                                 {"type": "text", "text": f"{percent}%", "size": "xs", "align": "end", "color": color, "weight": "bold"}
                             ]
                         },
                         {
-                            "type": "box", "layout": "vertical", "backgroundColor": "#eeeeee", "height": "6px", "cornerRadius": "3px",
+                            "type": "box",
+                            "layout": "vertical",
+                            "backgroundColor": "#eeeeee",
+                            "height": "6px",
+                            "cornerRadius": "3px",
                             "contents": [
                                 {
-                                    "type": "box", "layout": "vertical", 
-                                    "width": f"{display_percent}%", 
-                                    "backgroundColor": color, "height": "6px", "cornerRadius": "3px"
+                                    "type": "box",
+                                    "layout": "vertical",
+                                    "width": f"{display_percent}%",
+                                    "backgroundColor": color,
+                                    "height": "6px",
+                                    "cornerRadius": "3px",
+                                    "contents": [] 
                                 }
                             ]
                         }
